@@ -295,7 +295,8 @@ $(function() {
   var LogInView = Parse.View.extend({
     events: {
       "submit form.login-form": "logIn",
-      "submit form.signup-form": "signUp"
+      "submit form.signup-form": "signUp",
+      "click button#fb_login": "fbLogin",
     },
 
     el: ".content",
@@ -347,6 +348,61 @@ $(function() {
       });
 
       this.$(".signup-form button").attr("disabled", "disabled");
+
+      return false;
+    },
+
+    fbLogin: function(e) {
+      var self = this;
+
+
+      (function(){
+        var dfr = $.Deferred();
+        Parse.FacebookUtils.logIn(null, {
+          success: function(user) {
+            if (!user.existed()) {
+              console.log("User signed up and logged in through Facebook!");
+            } else {
+              console.log("User logged in through Facebook!");
+            }
+            return dfr.resolve(user);
+          },
+          error: function(user, error) {
+            console.log("User cancelled the Facebook login or did not fully authorize.");
+            dfr.reject()
+          }
+        });
+        return dfr.promise();
+      })().then(function(user){
+        var dfr = $.Deferred();
+
+        FB.api('/me', function(response) {
+          console.log(response);
+          Parse.User.current().save({
+            username: response.name,
+          },
+          {
+            success: function(e) {
+              console.log(e);
+              dfr.resolve();
+            },
+            error: function() {
+              dfr.reject();
+            }
+          });
+        });
+        return dfr.promise();
+      }).then(function() {
+
+        new ManageTodosView();
+        self.undelegateEvents();
+        delete self;
+      }).fail(function() {
+        console.log('login failed!');
+        $("#fb_login").removeAttr("disabled");
+      });
+
+      $("#fb_login").attr("disabled", "disabled");
 
       return false;
     },
@@ -404,39 +460,5 @@ $(function() {
   new AppRouter;
   new AppView;
   Parse.history.start();
-
-  window.fbAsyncInit = function() {
-    Parse.FacebookUtils.init({
-      appId      : '1496372537247600',
-      channelUrl : '//hujiko.sakura.ne.jp/test/ParseTodo/channel.html',
-      status     : true,
-      xfbml      : true
-    });
-
-    FB.getLoginStatus(function(response) {
-      if (response.status !== 'connected') {
-        Parse.FacebookUtils.logIn(null, {
-          error: function(user, error) {
-            alert("User cancelled the Facebook login or did not fully authorize.");
-          }
-        });
-      }
-    });
-
-    FB.Event.subscribe('auth.authResponseChange', function(response) {
-      if (response.status === 'connected') {
-        if (!Parse.User.current()) {
-          Parse.FacebookUtils.logIn(null, {
-            success: function(user) {
-              new ManageTodosView;
-            }
-          });
-        }
-      } else {
-        new LogInView;
-      }
-    });
-
-  };
 });
 
